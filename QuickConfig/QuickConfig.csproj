@@ -4,6 +4,11 @@
     <TargetFramework>net5.0-windows</TargetFramework>
     <LangVersion>9.0</LangVersion>
     <Nullable>enable</Nullable>
+    <Authors>KuroiLight</Authors>
+    <Copyright>KuroiLight 2020</Copyright>
+    <PackageProjectUrl>https://github.com/KuroiLight/QuickConfig</PackageProjectUrl>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/KuroiLight/QuickConfig</RepositoryUrl>
   </PropertyGroup>
 
 </Project>
