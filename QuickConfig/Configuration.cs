@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Text;
 
@@ -7,7 +8,18 @@ namespace QuickConfig
 {
     public sealed class Configuration
     {
-        private readonly Dictionary<string, string> ConfigKeyValues;
+        private readonly Dictionary<string, object> ConfigKeyValues;
+
+        /// <summary>
+        /// validates whether the value is correct or in bounds, may also transform the value if it isnt
+        /// </summary>
+        /// <typeparam name="T">the type of the value to validate</typeparam>
+        /// <param name="value">the value to validate or transform</param>
+        /// <returns>returns a (bool for whether the value is valid, true whether a transform was made or not if value is valid in the end;  the final value, should always return the value transformed or not if its valid)</returns>
+        public delegate (bool, T?) ValidationMethod<T>(in T value);
+
+        private object? cachedValue;
+        private string? cachedKey;
 
         static Configuration()
         {
@@ -18,43 +30,55 @@ namespace QuickConfig
 
         private Configuration()
         {
-            ConfigKeyValues = new Dictionary<string, string>();
+            ConfigKeyValues = new Dictionary<string, object>();
         }
 
-        public bool SetValue<T>(string Key, T Value, Func<T, (bool, T)>? ValidateValue = null)
+        public bool SetValue<T>(string key, T value, ValidationMethod<T> vmethod)
         {
-            (bool valid, T? validatedValue) = (ValidateValue is not null) ? ValidateValue(Value) : (true, Value);
-            if (valid && validatedValue is not null) {
-                ConfigKeyValues[Key] = validatedValue.ToString();
-            }
-            return valid;
+            (bool valid, T? transormed) = vmethod(value);
+            return valid && SetValue<T>(key, transormed);
         }
 
-        public (bool, T?) GetValue<T>(string Key, Func<T, (bool, T)>? ValidateValue = null)
+        public T? GetValue<T>(string key, ValidationMethod<T> vmethod)
         {
-            var value = ConfigKeyValues[Key];
-            if (value is null)
-                return (false, default(T));
-
-            var targetType = typeof(T);
-            if (targetType is null)
-                return (false, default(T));
-
-            var parseMethod = targetType.GetMethod("TryParse", new Type[] { typeof(string), typeof(T).MakeByRefType() });
-            if (parseMethod is null)
-                return (false, default(T));
-
-            var parseParams = new object[2];
-            parseParams[0] = value;
-            var _invocationResult = parseMethod.Invoke(targetType, parseParams);
-            if (_invocationResult is bool parsed && parsed && parseParams[1] is not null) {
-                if (ValidateValue is not null)
-                    return ValidateValue((T)parseParams[1]);
-                else
-                    return (true, (T)parseParams[1]);
+            T? gottenValue = GetValue<T>(key);
+            if (gottenValue is not null) {
+                (bool valid, T? transormed) = vmethod(gottenValue);
+                return transormed;
             }
+            return default;
+        }
 
-            return (false, default(T));
+        public bool SetValue<T>(string key, T value)
+        {
+            if (value is null || key is null)
+                return false;
+
+            var keyname = value.GetType().ToString() + ':' + key;
+
+            ConfigKeyValues[keyname] = (object)value;
+            return true;
+        }
+
+        public T? GetValue<T>(string key)
+        {
+            if (key is null)
+                return default(T);
+
+            if (key == cachedKey && cachedValue is not null)
+                return (T)cachedValue;
+
+            var keyname = typeof(T).ToString() + ':' + key;
+            if (!ConfigKeyValues.ContainsKey(keyname))
+                return default;
+
+            var value = ConfigKeyValues[keyname];
+
+            (cachedKey, cachedValue) = (key, value);
+
+            if (value is not null)
+                return (T)value;
+            return default(T);
         }
 
         private static bool ValidFilename(string filename)
@@ -90,6 +114,29 @@ namespace QuickConfig
 
         public bool LoadFromFile(string filename)
         {
+            static (string s1, string s2) split(string s, char splitter)
+            {
+                var splitten = s.Split(splitter, StringSplitOptions.TrimEntries);
+                return (splitten[0], splitten[1]);
+            }
+
+            static object? StringToType(string s, string type)
+            {
+                if (s is null || type is null)
+                    return null;
+
+                Type T = Type.GetType(type);
+                if (T is null)
+                    return null;
+
+                TypeConverter tc = TypeDescriptor.GetConverter(T);
+                object? converted = tc.ConvertFromString(s);
+                if (converted is null)
+                    return null;
+
+                return converted;
+            }
+
             if (!ValidFilename(filename))
                 return false;
 
@@ -101,10 +148,14 @@ namespace QuickConfig
                         var line = fs.ReadLine();
                         if (line is null)
                             continue;
-                        var split = line.Split("=", StringSplitOptions.TrimEntries);
-                        (string k, string v) = (split[0], split[1]);
-                        if (k is not null && v is not null)
-                            ConfigKeyValues.Add(k, v);
+
+                        (string k, string v) = split(line, '=');
+                        if (k is not null && v is not null) {
+                            (string type, string key) = split(k, ':');
+                            object? value = StringToType(v, type);
+                            if (value is not null)
+                                ConfigKeyValues.Add(k, value);
+                        }
                     }
                 }
                 return true;
