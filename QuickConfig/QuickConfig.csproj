@@ -9,7 +9,7 @@
     <PackageProjectUrl>https://github.com/KuroiLight/QuickConfig</PackageProjectUrl>
     <RepositoryType>git</RepositoryType>
     <RepositoryUrl>https://github.com/KuroiLight/QuickConfig</RepositoryUrl>
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
   </PropertyGroup>
 
 </Project>
