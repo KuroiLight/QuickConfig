@@ -39,14 +39,14 @@ namespace QuickConfig
             return valid && SetValue<T>(key, transormed);
         }
 
-        public T? GetValue<T>(string key, ValidationMethod<T> vmethod)
+        public (bool, T?) GetValue<T>(string key, ValidationMethod<T> vmethod)
         {
-            T? gottenValue = GetValue<T>(key);
-            if (gottenValue is not null) {
+            (bool got, T? gottenValue) = GetValue<T>(key);
+            if (got && gottenValue is not null) {
                 (bool valid, T? transormed) = vmethod(gottenValue);
-                return transormed;
+                return (true, transormed);
             }
-            return default;
+            return (false, default);
         }
 
         public bool SetValue<T>(string key, T value)
@@ -60,25 +60,25 @@ namespace QuickConfig
             return true;
         }
 
-        public T? GetValue<T>(string key)
+        public (bool, T?) GetValue<T>(string key)
         {
             if (key is null)
-                return default(T);
+                return (false, default(T));
 
             if (key == cachedKey && cachedValue is not null)
-                return (T)cachedValue;
+                return (true, (T)cachedValue);
 
             var keyname = typeof(T).ToString() + ':' + key;
             if (!ConfigKeyValues.ContainsKey(keyname))
-                return default;
+                return (false, default);
 
             var value = ConfigKeyValues[keyname];
 
             (cachedKey, cachedValue) = (key, value);
 
             if (value is not null)
-                return (T)value;
-            return default(T);
+                return (true, (T)value);
+            return (false, default(T));
         }
 
         private static bool ValidFilename(string filename)
